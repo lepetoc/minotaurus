@@ -1,9 +1,10 @@
-import { cookies } from 'next/headers'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import SettingsForm from './settings-form'
 
 export default async function DashboardSettingsPage() {
-  const cookieStore = await cookies()
-  const currentUsername = cookieStore.get('biscorb_user')?.value ?? ''
+  const session = await getServerSession(authOptions)
+  const currentUsername = session?.user?.name ?? ''
 
   return (
     <div className="space-y-6">

@@ -1,4 +1,5 @@
-import { cookies } from 'next/headers'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import { revalidateTag } from 'next/cache'
 
 type GifItem = {
@@ -92,8 +93,8 @@ async function refreshKlipyAction(formData: FormData) {
 }
 
 export default async function DashboardPage({ searchParams }: PageProps) {
-  const cookieStore = await cookies()
-  const username = cookieStore.get('biscorb_user')?.value
+  const session = await getServerSession(authOptions)
+  const username = session?.user?.name
   const sp = (await searchParams) ?? {}
   const q = normalizeQuery(sp.q)
   const result = await fetchKlipyGifs(q)
