@@ -133,6 +133,6 @@ La Server Action `updateUsernameAction` (dans `dashboard/settings`) appelle `rev
 
 ## 7. Répartition du travail
 
-* **Luca** : joue à Genshin
+* **Luca** : DevOps et qualité du code
 * **Pierre** : maintenance et développement de l’API backend
 * **Moi** : développement du frontend et de l’interface utilisateur
