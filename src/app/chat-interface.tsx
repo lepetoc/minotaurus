@@ -210,8 +210,8 @@ export function ChatInterface({ username }: ChatInterfaceProps) {
   }
 
   return (
-    <SidebarProvider>
-      <SidebarInset className="min-h-screen bg-background">
+    <SidebarProvider className="h-screen overflow-hidden">
+      <SidebarInset className="h-full bg-background">
         <header className="flex h-16 shrink-0 items-center gap-3 border-b-2 border-border bg-secondary-background px-4 sm:px-6">
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-xl font-heading">Biscord</h1>
