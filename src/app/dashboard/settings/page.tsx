@@ -1,8 +1,21 @@
-export default function DashboardSettingsPage() {
+import { cookies } from 'next/headers'
+import SettingsForm from './settings-form'
+
+export default async function DashboardSettingsPage() {
+  const cookieStore = await cookies()
+  const currentUsername = cookieStore.get('biscorb_user')?.value ?? ''
+
   return (
-    <div className="space-y-2">
-      <h1 className="text-2xl">Parametres</h1>
-      <p className="opacity-80">Page placeholder (a implementer).</p>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-heading">Paramètres</h1>
+        <p className="text-sm opacity-60 mt-1">Modifie ton profil.</p>
+      </div>
+
+      <div className="rounded-[var(--radius-base)] border border-border bg-secondary-background p-6 shadow-shadow max-w-md">
+        <h2 className="font-heading mb-4">Nom d&apos;utilisateur</h2>
+        <SettingsForm currentUsername={currentUsername} />
+      </div>
     </div>
   )
 }

@@ -113,7 +113,25 @@ Les fonctionnalités incluses dans le MVP sont :
 
 ---
 
-## 6. Répartition du travail
+## 6. Stratégie de cache et revalidation (Next.js)
+
+### Pages data-driven (RSC)
+
+| Route | Source | Type de cache | Durée | Tags | Justification |
+|---|---|---|---|---|---|
+| `/blog` | JSONPlaceholder API | `fetch` + `next.revalidate` | 3 600 s (1 h) | `blog:list` | Les articles changent rarement ; 1 h est un bon compromis fraîcheur / perf |
+| `/blog/[slug]` | JSONPlaceholder API | `fetch` + `next.revalidate` | 3 600 s (1 h) | `blog:post:<slug>` | Même logique que la liste ; tag individuel pour revalider à l'unité |
+| `/dashboard` | Tenor API | `fetch` + `next.revalidate` | 60 s (recherche) / 300 s (featured) | `tenor:search:<q>` / `tenor:featured` | Les résultats de recherche évoluent vite ; la page featured est plus stable |
+| `/dashboard/users` | PostgreSQL via `unstable_cache` | `unstable_cache` | 60 s | `users:list` | Données vivantes en base ; 60 s assure une vue quasi temps-réel sans surcharger la DB |
+| `/dashboard/users/[id]` | PostgreSQL via `unstable_cache` | `unstable_cache` | 60 s | `users:<id>` | Tag individuel pour invalider précisément après une mutation |
+
+### Revalidation après mutation
+
+La Server Action `updateUsernameAction` (dans `dashboard/settings`) appelle `revalidateTag('users:list')` et `revalidateTag('users:<id>')` après une mise à jour réussie en base. Cela invalide immédiatement les entrées de cache correspondantes pour que les pages liste et détail reflètent les nouvelles données dès la prochaine requête.
+
+---
+
+## 7. Répartition du travail
 
 * **Luca** : joue à Genshin
 * **Pierre** : maintenance et développement de l’API backend
