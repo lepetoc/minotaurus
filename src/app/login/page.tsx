@@ -36,7 +36,7 @@ export default function LoginPage() {
     if (result?.error) {
       setError('Identifiants invalides.')
     } else {
-      router.replace('/dashboard')
+      router.replace(result?.url ?? '/dashboard')
     }
   }
 
