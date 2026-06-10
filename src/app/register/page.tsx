@@ -68,7 +68,7 @@ export default function RegisterPage() {
     if (result?.error) {
       router.replace('/login')
     } else {
-      router.replace('/dashboard')
+      router.replace('/')
     }
   }
 

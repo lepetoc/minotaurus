@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useState, type FormEvent } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -16,6 +17,8 @@ import {
 
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const callbackUrl = searchParams.get('callbackUrl') ?? '/'
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
 
@@ -36,7 +39,7 @@ export default function LoginPage() {
     if (result?.error) {
       setError('Identifiants invalides.')
     } else {
-      router.replace(result?.url ?? '/dashboard')
+      router.replace(callbackUrl)
     }
   }
 
