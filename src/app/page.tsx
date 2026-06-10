@@ -1,49 +1,34 @@
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
+'use client'
 
-type PageProps = {
-  searchParams?: Promise<{ error?: string }>
-}
+import { useState } from 'react'
+import { signIn } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 
-async function signInAction(formData: FormData) {
-  'use server'
+export default function LoginPage() {
+  const router = useRouter()
+  const [error, setError] = useState<string | null>(null)
+  const [pending, setPending] = useState(false)
 
-  const username = String(formData.get('username') ?? '').trim()
-  const password = String(formData.get('password') ?? '')
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setError(null)
+    setPending(true)
 
-  if (!username) {
-    redirect('/?error=missing-username')
+    const formData = new FormData(e.currentTarget)
+    const result = await signIn('credentials', {
+      username: formData.get('username'),
+      password: formData.get('password'),
+      redirect: false,
+    })
+
+    setPending(false)
+
+    if (result?.error) {
+      setError('Identifiants invalides.')
+    } else {
+      router.push('/dashboard')
+    }
   }
-
-  if (!password) {
-    redirect('/?error=missing-password')
-  }
-
-  // TODO: brancher la vraie API d'auth.
-  // Placeholder volontairement simple.
-  const cookieStore = await cookies()
-  cookieStore.set('biscorb_user', username, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    path: '/',
-    maxAge: 60 * 60 * 24 * 7,
-  })
-
-  redirect('/dashboard')
-}
-
-export default async function Page({ searchParams }: PageProps) {
-  const sp = (await searchParams) ?? {}
-  const error = sp.error
-  const errorMessage =
-    error === 'missing-username'
-      ? "Le nom d'utilisateur est requis."
-      : error === 'missing-password'
-        ? 'Le mot de passe est requis.'
-        : error
-          ? 'Identifiants invalides.'
-          : null
 
   return (
     <main className="min-h-screen flex items-center justify-center px-6">
@@ -53,16 +38,16 @@ export default async function Page({ searchParams }: PageProps) {
           <p className="text-sm opacity-80">Connecte-toi pour acceder au chat.</p>
         </div>
 
-        <form action={signInAction} className="p-6 space-y-4">
-          {errorMessage ? (
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error ? (
             <div className="rounded-[var(--radius-base)] border border-border bg-background px-3 py-2 text-sm">
-              {errorMessage}
+              {error}
             </div>
           ) : null}
 
           <div className="space-y-2">
             <label htmlFor="username" className="text-sm font-heading">
-              Nom d'utilisateur
+              Nom d&apos;utilisateur
             </label>
             <input
               id="username"
@@ -89,9 +74,10 @@ export default async function Page({ searchParams }: PageProps) {
 
           <button
             type="submit"
-            className="w-full rounded-[var(--radius-base)] border border-border bg-main px-3 py-2 text-main-foreground shadow-shadow active:translate-x-[var(--spacing-boxShadowX)] active:translate-y-[var(--spacing-boxShadowY)] active:shadow-none"
+            disabled={pending}
+            className="w-full rounded-[var(--radius-base)] border border-border bg-main px-3 py-2 text-main-foreground shadow-shadow active:translate-x-[var(--spacing-boxShadowX)] active:translate-y-[var(--spacing-boxShadowY)] active:shadow-none disabled:opacity-50"
           >
-            Se connecter
+            {pending ? 'Connexion...' : 'Se connecter'}
           </button>
         </form>
       </div>
