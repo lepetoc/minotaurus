@@ -2,7 +2,7 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 
 type PageProps = {
-  searchParams?: { error?: string }
+  searchParams?: Promise<{ error?: string }>
 }
 
 async function signInAction(formData: FormData) {
@@ -34,7 +34,7 @@ async function signInAction(formData: FormData) {
 }
 
 export default async function Page({ searchParams }: PageProps) {
-  const sp = searchParams ?? {}
+  const sp = (await searchParams) ?? {}
   const error = sp.error
   const errorMessage =
     error === 'missing-username'
