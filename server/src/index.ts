@@ -18,9 +18,11 @@ type AuthenticatedWebSocket = WebSocket & { user?: User }
 type ClientMessage =
   | { type: 'auth'; token: string }
   | { type: 'message'; content: string }
+  | { type: 'gif'; url: string; title?: string }
 
 type ServerMessage =
   | { type: 'message'; content: string; user: User; timestamp: string }
+  | { type: 'gif'; url: string; title: string; user: User; timestamp: string }
   | { type: 'userlist'; users: User[] }
 
 const wss = new WebSocketServer({ port: PORT })
@@ -61,8 +63,7 @@ wss.on('connection', (ws: AuthenticatedWebSocket) => {
 
     if (parsed.type === 'auth') {
       try {
-const payload = jwt.verify(parsed.token, WS_SECRET) as { sub: string }
-
+        const payload = jwt.verify(parsed.token, WS_SECRET) as { sub: string }
         const result = await db.query(
           'SELECT id, username FROM users WHERE id = $1',
           [payload.sub]
@@ -82,12 +83,31 @@ const payload = jwt.verify(parsed.token, WS_SECRET) as { sub: string }
     if (!ws.user) return
 
     if (parsed.type === 'message' && parsed.content?.trim()) {
-      broadcast({
+      const msg: ServerMessage = {
         type: 'message',
         content: parsed.content,
         user: ws.user,
         timestamp: new Date().toISOString(),
-      })
+      }
+      broadcast(msg)
+      db.query('INSERT INTO messages (user_id, content) VALUES ($1, $2)', [ws.user.id, parsed.content])
+        .catch((err) => console.error('Failed to save message:', err))
+    }
+
+    if (parsed.type === 'gif' && parsed.url) {
+      const title = parsed.title ?? 'GIF'
+      const msg: ServerMessage = {
+        type: 'gif',
+        url: parsed.url,
+        title,
+        user: ws.user,
+        timestamp: new Date().toISOString(),
+      }
+      broadcast(msg)
+      db.query(
+        'INSERT INTO messages (user_id, gif_url, gif_title) VALUES ($1, $2, $3)',
+        [ws.user.id, parsed.url, title]
+      ).catch((err) => console.error('Failed to save gif:', err))
     }
   })
 
