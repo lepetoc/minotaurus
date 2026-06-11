@@ -1,11 +1,16 @@
+import { Suspense } from 'react'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { revalidateTag } from 'next/cache'
+import { GifMedia } from '@/components/gif-media'
 
 type GifItem = {
   id: string
   title: string
   url: string
+  gifUrl?: string
+  mp4Url?: string
+  webmUrl?: string
 }
 
 type GifResult = {
@@ -33,8 +38,8 @@ async function fetchKlipyGifs(query: string | null): Promise<GifResult> {
   }
 
   const endpoint = query
-    ? `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(query)}&key=${encodeURIComponent(apiKey)}&limit=24&media_filter=gif,tinygif`
-    : `https://tenor.googleapis.com/v2/featured?key=${encodeURIComponent(apiKey)}&limit=24&media_filter=gif,tinygif`
+    ? `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(query)}&key=${encodeURIComponent(apiKey)}&limit=24&media_filter=tinymp4,tinywebm,tinygif`
+    : `https://tenor.googleapis.com/v2/featured?key=${encodeURIComponent(apiKey)}&limit=24&media_filter=tinymp4,tinywebm,tinygif`
 
   let res: Response
   try {
@@ -63,6 +68,8 @@ async function fetchKlipyGifs(query: string | null): Promise<GifResult> {
       id?: string
       content_description?: string
       media_formats?: {
+        tinymp4?: { url?: string }
+        tinywebm?: { url?: string }
         gif?: { url?: string }
         tinygif?: { url?: string }
       }
@@ -70,17 +77,25 @@ async function fetchKlipyGifs(query: string | null): Promise<GifResult> {
   }
 
   const results = data.results ?? []
-  const gifs = results
-    .map((r, idx) => {
-      const url = r.media_formats?.tinygif?.url ?? r.media_formats?.gif?.url
-      if (!url) return null
-      return {
+  const gifs = results.flatMap((r, idx): GifItem[] => {
+    const mp4Url = r.media_formats?.tinymp4?.url
+    const webmUrl = r.media_formats?.tinywebm?.url
+    const gifUrl = r.media_formats?.tinygif?.url ?? r.media_formats?.gif?.url
+    const url = mp4Url ?? webmUrl ?? gifUrl
+
+    if (!url) return []
+
+    return [
+      {
         id: r.id ?? String(idx),
         title: r.content_description ?? 'GIF',
         url,
-      }
-    })
-    .filter((x): x is GifItem => Boolean(x))
+        gifUrl,
+        mp4Url,
+        webmUrl,
+      },
+    ]
+  })
 
   return { gifs }
 }
@@ -92,13 +107,71 @@ async function refreshKlipyAction(formData: FormData) {
   revalidateTag(q ? `tenor:search:${q}` : 'tenor:featured', { expire: 0 })
 }
 
+function GifGridSkeleton() {
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4" aria-hidden="true">
+      {Array.from({ length: 8 }).map((_, index) => (
+        <div
+          key={index}
+          className="h-40 animate-pulse rounded-[var(--radius-base)] border border-border bg-secondary-background shadow-shadow"
+        />
+      ))}
+    </div>
+  )
+}
+
+async function GifResults({
+  query,
+  hasKey,
+}: {
+  query: string | null
+  hasKey: boolean
+}) {
+  const result = await fetchKlipyGifs(query)
+  const gifs = result.gifs
+
+  if (result.error) {
+    return (
+      <div className="rounded-[var(--radius-base)] border border-border bg-background px-3 py-2 text-sm">
+        {result.error}
+      </div>
+    )
+  }
+
+  if (hasKey && gifs.length === 0) {
+    return <div className="text-sm opacity-80">Aucun GIF trouve.</div>
+  }
+
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+      {gifs.map((g) => (
+        <a
+          key={g.id}
+          href={g.url}
+          target="_blank"
+          rel="noreferrer"
+          className="block overflow-hidden rounded-[var(--radius-base)] border border-border bg-secondary-background shadow-shadow"
+          title={g.title}
+        >
+          <GifMedia
+            title={g.title}
+            url={g.url}
+            gifUrl={g.gifUrl}
+            mp4Url={g.mp4Url}
+            webmUrl={g.webmUrl}
+            className="h-40 w-full"
+          />
+        </a>
+      ))}
+    </div>
+  )
+}
+
 export default async function DashboardPage({ searchParams }: PageProps) {
   const session = await getServerSession(authOptions)
   const username = session?.user?.name
   const sp = (await searchParams) ?? {}
   const q = normalizeQuery(sp.q)
-  const result = await fetchKlipyGifs(q)
-  const gifs = result.gifs
   const hasKey = Boolean(process.env.API_KEY || process.env.TENOR_API_KEY)
 
   return (
@@ -141,35 +214,9 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         </form>
       </div>
 
-      {result.error ? (
-        <div className="rounded-[var(--radius-base)] border border-border bg-background px-3 py-2 text-sm">
-          {result.error}
-        </div>
-      ) : null}
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        {gifs.map((g) => (
-          <a
-            key={g.id}
-            href={g.url}
-            target="_blank"
-            rel="noreferrer"
-            className="block overflow-hidden rounded-[var(--radius-base)] border border-border bg-secondary-background shadow-shadow"
-            title={g.title}
-          >
-            <img
-              src={g.url}
-              alt={g.title}
-              loading="lazy"
-              className="h-40 w-full object-cover"
-            />
-          </a>
-        ))}
-      </div>
-
-      {hasKey && gifs.length === 0 ? (
-        <div className="text-sm opacity-80">Aucun GIF trouve.</div>
-      ) : null}
+      <Suspense key={q ?? 'featured'} fallback={<GifGridSkeleton />}>
+        <GifResults query={q} hasKey={hasKey} />
+      </Suspense>
     </div>
   )
 }

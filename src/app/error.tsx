@@ -1,7 +1,7 @@
 'use client'
 
 export default function Error({
-  error: _error,
+  error,
   reset,
 }: {
   error: Error & { digest?: string }
@@ -10,7 +10,8 @@ export default function Error({
   return (
     <div>
       <h2>Une erreur interne est survenue (500)</h2>
-      <button onClick={() => reset()}>Réessayer</button>
+      {error.digest ? <p className="text-sm opacity-70">Reference: {error.digest}</p> : null}
+      <button onClick={() => reset()}>Reessayer</button>
     </div>
   )
 }

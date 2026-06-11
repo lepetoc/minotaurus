@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   const limit = Math.min(Number(searchParams.get('limit') ?? DEFAULT_LIMIT), 100)
 
   const result = await pool.query(
-    `SELECT m.id, m.content, m.created_at,
+    `SELECT m.id, m.content, m.gif_url, m.gif_title, m.created_at,
             u.id AS user_id, u.username
      FROM messages m
      JOIN users u ON u.id = m.user_id
@@ -25,14 +25,14 @@ export async function GET(req: NextRequest) {
     [limit]
   )
 
-  const messages = result.rows
-    .reverse()
-    .map((row) => ({
-      id: row.id,
-      content: row.content,
-      timestamp: row.created_at,
-      user: { id: row.user_id, username: row.username },
-    }))
+  const messages = result.rows.reverse().map((row) => ({
+    id: row.id,
+    content: (row.content as string | null) ?? undefined,
+    gif_url: (row.gif_url as string | null) ?? undefined,
+    gif_title: (row.gif_title as string | null) ?? undefined,
+    timestamp: row.created_at,
+    user: { id: row.user_id, username: row.username },
+  }))
 
   return NextResponse.json({ messages })
 }

@@ -1,4 +1,4 @@
-\restrict Sgfo8ZFvPm8IDbNbvnvPeygw12lGxkRcUGapmDRlRMXnSQnMoz5vVzOmbnwsNIs
+\restrict S9brVMU3UxCLK70V5t3Z24zbvI5ejdbEEIDttOyp29bV3RB1A9i2kGPRSrfqVU5
 
 -- Dumped from database version 17.9
 -- Dumped by pg_dump version 18.1 (Ubuntu 18.1-1.pgdg24.04+2)
@@ -20,6 +20,20 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
+-- Name: messages; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.messages (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    content text,
+    created_at timestamp with time zone DEFAULT now(),
+    gif_url text,
+    gif_title text
+);
+
+
+--
 -- Name: schema_migrations; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -38,6 +52,14 @@ CREATE TABLE public.users (
     password_hash text NOT NULL,
     created_at timestamp with time zone DEFAULT now()
 );
+
+
+--
+-- Name: messages messages_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.messages
+    ADD CONSTRAINT messages_pkey PRIMARY KEY (id);
 
 
 --
@@ -65,10 +87,18 @@ ALTER TABLE ONLY public.users
 
 
 --
+-- Name: messages messages_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.messages
+    ADD CONSTRAINT messages_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
 -- PostgreSQL database dump complete
 --
 
-\unrestrict Sgfo8ZFvPm8IDbNbvnvPeygw12lGxkRcUGapmDRlRMXnSQnMoz5vVzOmbnwsNIs
+\unrestrict S9brVMU3UxCLK70V5t3Z24zbvI5ejdbEEIDttOyp29bV3RB1A9i2kGPRSrfqVU5
 
 
 --
@@ -76,4 +106,6 @@ ALTER TABLE ONLY public.users
 --
 
 INSERT INTO public.schema_migrations (version) VALUES
-    ('20260522000000');
+    ('20260522000000'),
+    ('20260610000000'),
+    ('20260610000001');

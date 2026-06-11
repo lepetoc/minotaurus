@@ -1,7 +1,7 @@
 'use client'
 
 import { ImagePlus, Loader2, Search, Send, Users } from 'lucide-react'
-import { useCallback, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,12 +20,17 @@ import {
   SidebarProvider,
   useSidebar,
 } from '@/components/ui/sidebar'
+import { GifMedia } from '@/components/gif-media'
 import { cn } from '@/lib/utils'
+import { useWebSocket, type WsChatMessage } from '@/hooks/use-websocket'
 
 type GifItem = {
   id: string
   title: string
   url: string
+  gifUrl?: string
+  mp4Url?: string
+  webmUrl?: string
 }
 
 type GifResponse = {
@@ -39,6 +44,15 @@ type ChatMessage = {
   body?: string
   gif?: GifItem
   createdAt: string
+}
+
+type HistoryMessage = {
+  id: string
+  content?: string
+  gif_url?: string
+  gif_title?: string
+  timestamp: string
+  user: { id: string; username: string }
 }
 
 type ChatInterfaceProps = {
@@ -61,6 +75,16 @@ function formatTime(date: Date) {
   }).format(date)
 }
 
+function wsToChatMessage(msg: WsChatMessage): ChatMessage {
+  return {
+    id: crypto.randomUUID(),
+    author: msg.user.username,
+    body: msg.type === 'message' ? msg.content : undefined,
+    gif: msg.type === 'gif' ? { id: crypto.randomUUID(), url: msg.url, title: msg.title } : undefined,
+    createdAt: formatTime(new Date(msg.timestamp)),
+  }
+}
+
 function UserSidebarToggle() {
   const { toggleSidebar } = useSidebar()
 
@@ -80,7 +104,6 @@ function UserSidebarToggle() {
 
 export function ChatInterface({ username }: ChatInterfaceProps) {
   const displayName = username.trim() || 'Moi'
-  const initials = useMemo(() => getInitials(displayName) || 'M', [displayName])
   const [message, setMessage] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [gifOpen, setGifOpen] = useState(false)
@@ -89,37 +112,59 @@ export function ChatInterface({ username }: ChatInterfaceProps) {
   const [gifError, setGifError] = useState<string | null>(null)
   const [gifLoading, setGifLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
+  const historyLoadedRef = useRef(false)
 
-  const addMessage = useCallback(
-    ({ body, gif }: Pick<ChatMessage, 'body' | 'gif'>) => {
-      const now = new Date()
+  const scrollToBottom = useCallback(() => {
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ block: 'end' })
+    })
+  }, [])
 
-      setMessages((current) => [
-        ...current,
-        {
-          id: crypto.randomUUID(),
-          author: displayName,
-          body,
-          gif,
-          createdAt: formatTime(now),
-        },
-      ])
+  // Chargement de l'historique au montage
+  useEffect(() => {
+    if (historyLoadedRef.current) return
+    historyLoadedRef.current = true
 
-      requestAnimationFrame(() => {
-        messagesEndRef.current?.scrollIntoView({ block: 'end' })
-      })
+    async function loadHistory() {
+      try {
+        const res = await fetch('/api/history')
+        if (!res.ok) return
+        const data = (await res.json()) as { messages: HistoryMessage[] }
+        const history: ChatMessage[] = data.messages.map((m) => ({
+          id: m.id,
+          author: m.user.username,
+          body: m.content,
+          gif: m.gif_url ? { id: m.id, url: m.gif_url, title: m.gif_title ?? 'GIF' } : undefined,
+          createdAt: formatTime(new Date(m.timestamp)),
+        }))
+        setMessages(history)
+        scrollToBottom()
+      } catch {
+        // fail silently
+      }
+    }
+    void loadHistory()
+  }, [scrollToBottom])
+
+  const handleIncomingMessage = useCallback(
+    (msg: WsChatMessage) => {
+      setMessages((prev) => [...prev, wsToChatMessage(msg)])
+      scrollToBottom()
     },
-    [displayName],
+    [scrollToBottom]
   )
+
+  const { status, users, sendMessage, sendGif } = useWebSocket({
+    url: process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8080',
+    onMessage: handleIncomingMessage,
+  })
 
   const loadGifs = useCallback(async (query: string) => {
     setGifLoading(true)
     setGifError(null)
 
     const params = new URLSearchParams()
-    if (query.trim()) {
-      params.set('q', query.trim())
-    }
+    if (query.trim()) params.set('q', query.trim())
 
     try {
       const response = await fetch(`/api/gifs?${params.toString()}`)
@@ -143,7 +188,6 @@ export function ChatInterface({ username }: ChatInterfaceProps) {
 
   function handleGifOpenChange(open: boolean) {
     setGifOpen(open)
-
     if (open && gifs.length === 0 && !gifLoading) {
       void loadGifs(gifQuery)
     }
@@ -151,11 +195,9 @@ export function ChatInterface({ username }: ChatInterfaceProps) {
 
   function handleSendMessage(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
-
     const trimmed = message.trim()
-    if (!trimmed) return
-
-    addMessage({ body: trimmed })
+    if (!trimmed || status !== 'connected') return
+    sendMessage(trimmed)
     setMessage('')
   }
 
@@ -165,17 +207,23 @@ export function ChatInterface({ username }: ChatInterfaceProps) {
   }
 
   function handleSendGif(gif: GifItem) {
-    addMessage({ gif })
+    if (status !== 'connected') return
+    sendGif(gif.url, gif.title)
     setGifOpen(false)
   }
 
   return (
-    <SidebarProvider>
-      <SidebarInset className="min-h-screen bg-background">
+    <SidebarProvider className="h-screen overflow-hidden">
+      <SidebarInset className="h-full bg-background">
         <header className="flex h-16 shrink-0 items-center gap-3 border-b-2 border-border bg-secondary-background px-4 sm:px-6">
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-xl font-heading">Biscord</h1>
           </div>
+          {status !== 'connected' && (
+            <span className="text-xs opacity-60">
+              {status === 'connecting' ? 'Connexion...' : 'Déconnecté'}
+            </span>
+          )}
           <UserSidebarToggle />
         </header>
 
@@ -199,7 +247,7 @@ export function ChatInterface({ username }: ChatInterfaceProps) {
                   >
                     <Avatar className="mt-0.5 size-10 outline-2">
                       <AvatarFallback className="bg-main font-heading text-main-foreground">
-                        {initials}
+                        {getInitials(item.author) || '?'}
                       </AvatarFallback>
                     </Avatar>
                     <div className="min-w-0 flex-1">
@@ -213,11 +261,10 @@ export function ChatInterface({ username }: ChatInterfaceProps) {
                         </p>
                       ) : null}
                       {item.gif ? (
-                        <div
-                          className="mt-2 aspect-video w-full max-w-sm rounded-base border-2 border-border bg-secondary-background bg-cover bg-center shadow-shadow"
-                          role="img"
-                          aria-label={item.gif.title}
-                          style={{ backgroundImage: `url(${item.gif.url})` }}
+                        <GifMedia
+                          title={item.gif.title}
+                          url={item.gif.url}
+                          className="mt-2 aspect-video w-full max-w-sm rounded-base border-2 border-border bg-secondary-background shadow-shadow"
                         />
                       ) : null}
                     </div>
@@ -289,13 +336,21 @@ export function ChatInterface({ username }: ChatInterfaceProps) {
                             key={gif.id}
                             type="button"
                             className={cn(
-                              'aspect-video rounded-base border-2 border-border bg-background bg-cover bg-center shadow-shadow transition-all',
+                              'aspect-video overflow-hidden rounded-base border-2 border-border bg-background shadow-shadow transition-all',
                               'hover:translate-x-boxShadowX hover:translate-y-boxShadowY hover:shadow-none',
                             )}
-                            style={{ backgroundImage: `url(${gif.url})` }}
                             onClick={() => handleSendGif(gif)}
                             aria-label={`Envoyer ${gif.title}`}
-                          />
+                          >
+                            <GifMedia
+                              title={gif.title}
+                              url={gif.url}
+                              gifUrl={gif.gifUrl}
+                              mp4Url={gif.mp4Url}
+                              webmUrl={gif.webmUrl}
+                              className="h-full w-full"
+                            />
+                          </button>
                         ))}
                       </div>
                     ) : null}
@@ -306,14 +361,20 @@ export function ChatInterface({ username }: ChatInterfaceProps) {
               <Input
                 value={message}
                 onChange={(event) => setMessage(event.target.value)}
-                placeholder={`Message # general en tant que ${displayName}`}
+                placeholder={
+                  status === 'connected'
+                    ? `Message # general en tant que ${displayName}`
+                    : 'Connexion en cours...'
+                }
                 className="h-11 min-w-0 flex-1 bg-background"
+                disabled={status !== 'connected'}
               />
               <Button
                 type="submit"
                 size="icon"
                 className="size-11 shrink-0"
                 aria-label="Envoyer"
+                disabled={status !== 'connected'}
               >
                 <Send />
               </Button>
@@ -326,7 +387,7 @@ export function ChatInterface({ username }: ChatInterfaceProps) {
         <SidebarHeader className="h-16 shrink-0 justify-center">
           <div className="px-2">
             <h2 className="font-heading">Membres connectes</h2>
-            <p className="text-sm opacity-70">1 en ligne</p>
+            <p className="text-sm opacity-70">{users.length} en ligne</p>
           </div>
         </SidebarHeader>
         <SidebarContent>
@@ -334,17 +395,19 @@ export function ChatInterface({ username }: ChatInterfaceProps) {
             <SidebarGroupLabel>En ligne</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton size="lg" className="h-14">
-                    <Avatar className="size-9 outline-2">
-                      <AvatarFallback className="bg-main font-heading text-main-foreground">
-                        {initials}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="min-w-0 flex-1 truncate">{displayName}</span>
-                    <span className="size-2 rounded-full border-2 border-border bg-chart-4" />
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                {users.map((user) => (
+                  <SidebarMenuItem key={user.id}>
+                    <SidebarMenuButton size="lg" className="h-14">
+                      <Avatar className="size-9 outline-2">
+                        <AvatarFallback className="bg-main font-heading text-main-foreground">
+                          {getInitials(user.username) || '?'}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="min-w-0 flex-1 truncate">{user.username}</span>
+                      <span className="size-2 rounded-full border-2 border-border bg-chart-4" />
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
