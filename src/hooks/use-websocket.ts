@@ -25,9 +25,19 @@ export function useWebSocket({ url, onMessage }: UseWebSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null)
   const onMessageRef = useRef(onMessage)
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const connectRef = useRef<() => Promise<void>>(async () => {})
   const mountedRef = useRef(true)
 
-  onMessageRef.current = onMessage
+  useEffect(() => {
+    onMessageRef.current = onMessage
+  }, [onMessage])
+
+  const scheduleReconnect = useCallback((delayMs: number) => {
+    if (reconnectRef.current) clearTimeout(reconnectRef.current)
+    reconnectRef.current = setTimeout(() => {
+      void connectRef.current()
+    }, delayMs)
+  }, [])
 
   const connect = useCallback(async () => {
     if (!mountedRef.current) return
@@ -45,7 +55,7 @@ export function useWebSocket({ url, onMessage }: UseWebSocketOptions) {
     } catch {
       if (!mountedRef.current) return
       setStatus('disconnected')
-      reconnectRef.current = setTimeout(connect, 5000)
+      scheduleReconnect(5000)
       return
     }
 
@@ -85,11 +95,15 @@ export function useWebSocket({ url, onMessage }: UseWebSocketOptions) {
       if (!mountedRef.current) return
       setStatus('disconnected')
       wsRef.current = null
-      reconnectRef.current = setTimeout(connect, 3000)
+      scheduleReconnect(3000)
     }
 
     ws.onerror = () => ws.close()
-  }, [url])
+  }, [scheduleReconnect, url])
+
+  useEffect(() => {
+    connectRef.current = connect
+  }, [connect])
 
   useEffect(() => {
     mountedRef.current = true

@@ -1,7 +1,7 @@
 'use client'
 
 import { ImagePlus, Loader2, Search, Send, Users } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,6 +20,7 @@ import {
   SidebarProvider,
   useSidebar,
 } from '@/components/ui/sidebar'
+import { GifMedia } from '@/components/gif-media'
 import { cn } from '@/lib/utils'
 import { useWebSocket, type WsChatMessage } from '@/hooks/use-websocket'
 
@@ -27,6 +28,9 @@ type GifItem = {
   id: string
   title: string
   url: string
+  gifUrl?: string
+  mp4Url?: string
+  webmUrl?: string
 }
 
 type GifResponse = {
@@ -100,7 +104,6 @@ function UserSidebarToggle() {
 
 export function ChatInterface({ username }: ChatInterfaceProps) {
   const displayName = username.trim() || 'Moi'
-  const initials = useMemo(() => getInitials(displayName) || 'M', [displayName])
   const [message, setMessage] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [gifOpen, setGifOpen] = useState(false)
@@ -258,11 +261,10 @@ export function ChatInterface({ username }: ChatInterfaceProps) {
                         </p>
                       ) : null}
                       {item.gif ? (
-                        <div
-                          className="mt-2 aspect-video w-full max-w-sm rounded-base border-2 border-border bg-secondary-background bg-cover bg-center shadow-shadow"
-                          role="img"
-                          aria-label={item.gif.title}
-                          style={{ backgroundImage: `url(${item.gif.url})` }}
+                        <GifMedia
+                          title={item.gif.title}
+                          url={item.gif.url}
+                          className="mt-2 aspect-video w-full max-w-sm rounded-base border-2 border-border bg-secondary-background shadow-shadow"
                         />
                       ) : null}
                     </div>
@@ -334,13 +336,21 @@ export function ChatInterface({ username }: ChatInterfaceProps) {
                             key={gif.id}
                             type="button"
                             className={cn(
-                              'aspect-video rounded-base border-2 border-border bg-background bg-cover bg-center shadow-shadow transition-all',
+                              'aspect-video overflow-hidden rounded-base border-2 border-border bg-background shadow-shadow transition-all',
                               'hover:translate-x-boxShadowX hover:translate-y-boxShadowY hover:shadow-none',
                             )}
-                            style={{ backgroundImage: `url(${gif.url})` }}
                             onClick={() => handleSendGif(gif)}
                             aria-label={`Envoyer ${gif.title}`}
-                          />
+                          >
+                            <GifMedia
+                              title={gif.title}
+                              url={gif.url}
+                              gifUrl={gif.gifUrl}
+                              mp4Url={gif.mp4Url}
+                              webmUrl={gif.webmUrl}
+                              className="h-full w-full"
+                            />
+                          </button>
                         ))}
                       </div>
                     ) : null}

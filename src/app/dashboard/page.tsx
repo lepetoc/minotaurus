@@ -1,11 +1,15 @@
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { revalidateTag } from 'next/cache'
+import { GifMedia } from '@/components/gif-media'
 
 type GifItem = {
   id: string
   title: string
   url: string
+  gifUrl?: string
+  mp4Url?: string
+  webmUrl?: string
 }
 
 type GifResult = {
@@ -33,8 +37,8 @@ async function fetchKlipyGifs(query: string | null): Promise<GifResult> {
   }
 
   const endpoint = query
-    ? `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(query)}&key=${encodeURIComponent(apiKey)}&limit=24&media_filter=gif,tinygif`
-    : `https://tenor.googleapis.com/v2/featured?key=${encodeURIComponent(apiKey)}&limit=24&media_filter=gif,tinygif`
+    ? `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(query)}&key=${encodeURIComponent(apiKey)}&limit=24&media_filter=tinymp4,tinywebm,tinygif`
+    : `https://tenor.googleapis.com/v2/featured?key=${encodeURIComponent(apiKey)}&limit=24&media_filter=tinymp4,tinywebm,tinygif`
 
   let res: Response
   try {
@@ -63,6 +67,8 @@ async function fetchKlipyGifs(query: string | null): Promise<GifResult> {
       id?: string
       content_description?: string
       media_formats?: {
+        tinymp4?: { url?: string }
+        tinywebm?: { url?: string }
         gif?: { url?: string }
         tinygif?: { url?: string }
       }
@@ -70,17 +76,25 @@ async function fetchKlipyGifs(query: string | null): Promise<GifResult> {
   }
 
   const results = data.results ?? []
-  const gifs = results
-    .map((r, idx) => {
-      const url = r.media_formats?.tinygif?.url ?? r.media_formats?.gif?.url
-      if (!url) return null
-      return {
+  const gifs = results.flatMap((r, idx): GifItem[] => {
+    const mp4Url = r.media_formats?.tinymp4?.url
+    const webmUrl = r.media_formats?.tinywebm?.url
+    const gifUrl = r.media_formats?.tinygif?.url ?? r.media_formats?.gif?.url
+    const url = mp4Url ?? webmUrl ?? gifUrl
+
+    if (!url) return []
+
+    return [
+      {
         id: r.id ?? String(idx),
         title: r.content_description ?? 'GIF',
         url,
-      }
-    })
-    .filter((x): x is GifItem => Boolean(x))
+        gifUrl,
+        mp4Url,
+        webmUrl,
+      },
+    ]
+  })
 
   return { gifs }
 }
@@ -157,11 +171,13 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             className="block overflow-hidden rounded-[var(--radius-base)] border border-border bg-secondary-background shadow-shadow"
             title={g.title}
           >
-            <img
-              src={g.url}
-              alt={g.title}
-              loading="lazy"
-              className="h-40 w-full object-cover"
+            <GifMedia
+              title={g.title}
+              url={g.url}
+              gifUrl={g.gifUrl}
+              mp4Url={g.mp4Url}
+              webmUrl={g.webmUrl}
+              className="h-40 w-full"
             />
           </a>
         ))}
