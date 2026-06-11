@@ -51,6 +51,12 @@ export function useWebSocket({ url, onMessage }: UseWebSocketOptions) {
 
     if (!mountedRef.current) return
 
+    // Guard against race: two connect() calls can both pass the initial check before the
+    // async fetch completes (React StrictMode double-invokes effects). Re-check here so
+    // whichever resolves second aborts instead of opening a second connection.
+    const stateAfterFetch = wsRef.current?.readyState
+    if (stateAfterFetch === WebSocket.OPEN || stateAfterFetch === WebSocket.CONNECTING) return
+
     const ws = new WebSocket(url)
     wsRef.current = ws
 

@@ -28,10 +28,12 @@ type ServerMessage =
 const wss = new WebSocketServer({ port: PORT })
 
 function getConnectedUsers(): User[] {
+  const seen = new Set<string>()
   const users: User[] = []
   wss.clients.forEach((client) => {
     const ws = client as AuthenticatedWebSocket
-    if (ws.readyState === WebSocket.OPEN && ws.user) {
+    if (ws.readyState === WebSocket.OPEN && ws.user && !seen.has(ws.user.id)) {
+      seen.add(ws.user.id)
       users.push(ws.user)
     }
   })
